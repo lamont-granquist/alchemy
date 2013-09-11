@@ -1,0 +1,22 @@
+body {
+  padding-top: 50px;
+}
+
+.number-input { width: 60px }
+
+.number-div { margin-bottom: 0px; }
+
+p, td, body, li, input, a, h1, h2, h3, h4, h5, h6, th {
+  font-family: 'Open Sans', Verdana, Helvetica, sans-serif !important;
+}
+
+.dragonborn-tag, .hearthfire-tag, .dawnguard-tag, .quest-tag {
+  vertical-align: super;
+  font-size: 80%;
+}
+
+.dragonborn-tag { color: #ff0000; }
+.hearthfire-tag { color: green; }
+.dawnguard-tag { color: blue; }
+.quest-tag { color: #bbbb00; }
+

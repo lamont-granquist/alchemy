@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en" ng-app="myApp">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skyrim Alchemy Calculator</title>
+
+    <link rel="stylesheet" href="/css/bootstrap.min.css" type="text/css" media="all" />
+    <link rel="stylesheet" href="/css/bootstrap-theme.min.css" type="text/css" media="all" />
+    <link rel="stylesheet" href="/css/application.css" type="text/css" media="all" />
+    <link href='//fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css'>
+
+    <script src="/js/lib/underscore-1.5.2.min.js"></script>
+    <script src="/js/lib/jquery-2.0.3.min.js"></script>
+    <script src="/js/lib/bootstrap-3.0.0.min.js"></script> 
+    <script src="/js/lib/angular-1.0.8.min.js"></script>
+    <script src="/js/lib/alchemy.js"></script>
+    <script src="/js/app.js"></script>
+
+    <link href="/favicon.png" rel="shortcut icon">
+  </head>
+  <body>
+
+    <div class="navbar navbar-inverse navbar-fixed-top">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="#">Skyrim Alchemy Calculator</a>
+        </div>
+      </div>
+    </div>
+
+    <div ng-controller="HomeCtrl">
+      <div class="container">
+        <form ng-submit="submit()" class="form-horizontal" role="form">
+          <div class="col-lg-3 col-md-12" ng-repeat="row in rows">
+            <div class="form-group number-div" ng-repeat="col in row">
+              <input type="number" class="number-input" name="whatever" min=0 ng-model="col.num"/>
+              <label for="foo" class="control-label">{{col.name}}</label>
+              <span class="dawnguard-tag" ng-show="col.dlc == 'dawnguard'">DG</span>
+              <span class="hearthfire-tag" ng-show="col.dlc == 'hearthfire'">HF</span>
+              <span class="dragonborn-tag" ng-show="col.dlc == 'dragonborn'">DB</span>
+              <span class="quest-tag" ng-show="col.dlc == 'quest'">Quest</span>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary">Submit</button>
+        </form>
+      </div>
+      <div class="container">
+        <div ng-repeat="result in results">
+          {{ result['num'] }}
+          <span ng-repeat="ingredient in result['ingredients']">
+            {{ ingredient['label'] }}
+          </span>
+          <br/>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

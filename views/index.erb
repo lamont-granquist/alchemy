@@ -51,13 +51,13 @@
         </form>
       </div>
       <div class="container">
-        <div ng-repeat="result in results">
-          {{ result['num'] }}
-          <span ng-repeat="ingredient in result['ingredients']">
-            {{ ingredient['label'] }}
-          </span>
-          <br/>
-        </div>
+        <table class="table table-striped table-hover table-condensed table-responsive">
+          <tr ng-repeat="result in results">
+            <td>{{ result['num'] }}</td>
+            <td>{{ result['potion']['total_cost'] }}</td>
+            <td ng-repeat="ingredient in result['ingredients']">{{ ingredient['label'] }}</td>
+          </tr>
+        </table>
       </div>
     </div>
   </body>

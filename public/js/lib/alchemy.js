@@ -2,6 +2,34 @@
 var PotionFactory = function() {
   this.alchemySkill = 100;
 
+  // sanity check to check the data looks valid
+  this.validateIngredientsEffects = function() {
+    var badness = false;
+    _.each(this.ingredients, function(ingredient) {
+      _.each(ingredient['effects'], function(effect) {
+        if ( typeof this.effects[effect] === 'undefined' ) {
+          console.log(ingredient + ' ' + effect + ' is undefined!');
+        } else {
+          if ( typeof this.effects[effect]['cost'] === 'undefined' ) {
+            console.log(effect + ' has no cost!');
+            badness = true
+          }
+          if ( typeof this.effects[effect]['mag'] === 'undefined' ) {
+            console.log(effect + ' has no mag!');
+            badness = true
+          }
+          if ( typeof this.effects[effect]['dur'] === 'undefined' ) {
+            console.log(effect + ' has no dur!');
+            badness = true
+          }
+        }
+      }, this);
+    }, this);
+    if (badness) {
+      alert("alchemy data failed internal consistency check!\ne-mail lamont@scriptkiddie.org and let him know");
+    }
+  }
+
   this.ingredients = {
     abecan_longfin: {
       effects: [
@@ -79,6 +107,14 @@ var PotionFactory = function() {
         'resist_fire',
         'fortify_conjuration',
         'ravage_stamina'
+      ]
+    },
+    bleeding_crown: {
+      effects: [
+        'weakness_to_fire',
+        'fortify_block',
+        'weakness_to_poison',
+        'resist_magic'
       ]
     },
     blisterwort: {
@@ -534,7 +570,7 @@ var PotionFactory = function() {
     large_antlers: {
       effects: [
         'restore_stamina',
-        'fortify_stamona',
+        'fortify_stamina',
         'slow',
         'damage_stamina_regen',
       ]
@@ -574,7 +610,7 @@ var PotionFactory = function() {
     mudcrab_chitin: {
       effects: [
         'restore_stamina',
-        'cure_disase',
+        'cure_disease',
         'resist_poison',
         'resist_fire'
       ]
@@ -674,7 +710,7 @@ var PotionFactory = function() {
       effects: [
         'restore_magicka',
         'ravage_magicka',
-        'fortify_magica',
+        'fortify_magicka',
         'damage_health'
       ]
     },
@@ -910,8 +946,8 @@ var PotionFactory = function() {
       effects: [
         'restore_stamina',
         'fortify_destruction',
-        'fortify_health',
-        'damage_stamina_regen'
+        'fortify_carry_weight',
+        'resist_magic',
       ]
     },
     yellow_mountain_flower: {
@@ -1059,6 +1095,10 @@ var PotionFactory = function() {
 
   this.effects = {
     cure_disease: {
+      description: "Cures all diseases",
+      cost: 0.5,
+      mag: 5,
+      dur: 0
     },
     damage_health: {
       description: "Causes MAG points of posion damage",
@@ -1067,6 +1107,10 @@ var PotionFactory = function() {
       dur: 1
     },
     damage_magicka: {
+      description: "Drains the target's Magicka by MAG points",
+      cost: 2.2,
+      mag: 3,
+      dur: 0
     },
     damage_magicka_regen: {
       description: "Decrease the target's Magicka regeneration by MAG% for DUR seconds",
@@ -1081,16 +1125,40 @@ var PotionFactory = function() {
       dur: 0
     },
     damage_stamina_regen: {
+      description: "Decrease the target's Stamina regeneration by MAG% for DUR seconds",
+      cost: 0.3,
+      mag: 100,
+      dur: 5
     },
     fear: {
+      description: "Creatures and people up to level MAG flee from combat for DUR seconds",
+      cost: 5,
+      mag: 1,
+      dur: 30
     },
     fortify_alteration: {
+      description: "Alteration spells last MAG% longer for DUR seconds",
+      cost: 0.2,
+      mag: 4,
+      dur: 60
     },
     fortify_barter: {
+      description: "You haggle for MAG% better prices for DUR seconds",
+      cost: 2,
+      mag: 1,
+      dur: 30
     },
     fortify_block: {
+      description: "Blocking absorbs MAG% more damage for DUR seconds",
+      cost: 0.5,
+      mag: 4,
+      dur: 60
     },
     fortify_carry_weight: {
+      description: "Carrying capacity increases by MAG for DUR seconds",
+      cost: 0.15,
+      mag: 4,
+      dur: 300
     },
     fortify_conjuration: {
       description: "Conjuration spells last MAG% longer for DUR seconds",
@@ -1099,8 +1167,16 @@ var PotionFactory = function() {
       dur: 60
     },
     fortify_destruction: {
+      description: "Destruction spells are MAG% stronger for DUR seconds",
+      cost: 0.5,
+      mag: 5,
+      dur: 60
     },
     fortify_enchanting: {
+      description: "For DUR seconds, items are echanted MAG% stronger",
+      cost: 0.6,
+      mag: 1,
+      dur: 30
     },
     fortify_health: {
       description: "Health is increased by MAG points for DUR seconds",
@@ -1109,12 +1185,28 @@ var PotionFactory = function() {
       dur: 60
     },
     fortify_heavy_armor: {
+      description: "Increase Heavy Armor skill by MAG points for DUR seconds",
+      cost: 0.5,
+      mag: 2,
+      dur: 60
     },
     fortify_illusion: {
+      description: "Illusion spells are MAG% stronger for DUR seconds",
+      cost: 0.4,
+      mag: 4,
+      dur: 60
     },
     fortify_light_armor: {
+      description: "Increases Light Armor skill by MAG points for DUR seconds",
+      cost: 0.5,
+      mag: 2,
+      dur: 60
     },
     fortify_lockpicking: {
+      description: "Lockpicking is MAG% easier for DUR seconds",
+      cost: 0.5,
+      mag: 2,
+      dur: 30
     },
     fortify_magicka: {
       description: "Magicka is increased by MAG points for DUR seconds",
@@ -1123,6 +1215,10 @@ var PotionFactory = function() {
       dur: 60
     },
     fortify_marksman: {
+      description: "Bows do MAG% more damage for DUR seconds",
+      cost: 0.5,
+      mag: 4,
+      dur: 60
     },
     fortify_one_handed: {
       description: "One-handed weapons do MAG% more damage for DUR seconds",
@@ -1130,17 +1226,41 @@ var PotionFactory = function() {
       mag: 4,
       dur: 60
     },
-    fortify_pick_pocket: {
+    fortify_pickpocket: {
+      description: "Pickpocketing is MAG% easier for DUR seconds",
+      cost: 0.5,
+      mag: 4,
+      dur: 60
     },
     fortify_restoration: {
+      description: "Restoration spells are MAG% stronger for DUR seconds",
+      cost: 0.5,
+      mag: 4,
+      dur: 60
     },
     fortify_smithing: {
+      description: "For DUR seconds, weapon and armor improving is MAG% better",
+      cost: 0.75,
+      mag: 4,
+      dur: 30
     },
     fortify_sneak: {
+      description: "You are MAG% harder to detect for DUR seconds",
+      cost: 0.5,
+      mag: 4,
+      dur: 60
     },
     fortify_stamina: {
+      description: "Stamina is incrased by MAG points for DUR seconds",
+      cost: 0.3,
+      mag: 4,
+      dur: 60
     },
     fortify_two_handed: {
+      description: "Two-handed weapons do MAG% more damage for DUR seconds",
+      cost: 0.5,
+      mag: 4,
+      dur: 60
     },
     frenzy: {
       description: "Creatures and people up to level MAG will attack anything nearby for DUR seconds",
@@ -1149,38 +1269,106 @@ var PotionFactory = function() {
       dur: 10
     },
     invisibility: {
+      description: "Invisibility for DUR seconds",
+      cost: 100,
+      mag: 0,
+      dur: 4
     },
     lingering_damage_health: {
+      description: "Causes MAG points of poison damage for DUR seconds",
+      cost: 12,
+      mag: 1,
+      dur: 10
     },
     lingering_damage_magicka: {
+      description: "Drains the target's Magicka by MAG points per second for DUR seconds",
+      cost: 10,
+      mag: 1,
+      dur: 10
     },
-    lingering_damage_strength: {
+    lingering_damage_stamina: {
+      description: "Drains the target's Stamina by MAG points per second for DUR seconds",
+      cost: 1.8,
+      mag: 1,
+      dur: 10
     },
     paralysis: {
+      description: "Target is paralyzed for DUR seconds",
+      cost: 500,
+      mag: 0,
+      dur: 1
     },
     ravage_health: {
+      description: "Causes MAG points of concentrated poison damage",
+      cost: 0.4,
+      mag: 2,
+      dur: 10
     },
     ravage_magicka: {
+      description: "Concentrated poison damages magicka by MAG points",
+      cost: 1,
+      mag: 2,
+      dur: 10
     },
     ravage_stamina: {
+      description: "Concentrated poison damages stamina by MAG points",
+      cost: 1.6,
+      mag: 2,
+      dur: 10
     },
     regenerate_health: {
+      description: "Health regenerates MAG% faster for DUR seconds",
+      cost: 0.1,
+      mag: 5,
+      dur: 300
     },
     regenerate_magicka: {
+      description: "Magicka regenerates MAG% faster for DUR seconds",
+      cost: 0.1,
+      mag: 5,
+      dur: 300
     },
     regenerate_stamina: {
+      description: "Stamina regenerates MAG% faster for DUR seconds",
+      cost: 0.1,
+      mag: 5,
+      dur: 300
     },
     resist_fire: {
+      description: "Resist MAG% of fire dmaage for DUR seconds",
+      cost: 0.5,
+      mag: 3,
+      dur: 60
     },
     resist_frost: {
+      description: "Resist MAG% of frost damage for DUR seconds",
+      cost: 0.5,
+      mag: 3,
+      dur: 60
     },
     resist_magic: {
+      description: "Resist MAG% of magic for DUR seconds",
+      cost: 1,
+      mag: 1,
+      dur: 60
     },
     resist_poison: {
+      description: "Resist MAG% of poison for DUR seconds",
+      cost: 0.5,
+      mag: 4,
+      dur: 60
     },
     resist_shock: {
+      description: "Resist MAG% of shock damage for DUR seconds",
+      cost: 0.5,
+      mag: 3,
+      dur: 60
     },
     restore_health: {
+      description: "Restore MAG points of Health",
+      cost: 0.5,
+      mag: 5,
+      dur: 0
     },
     restore_magicka: {
       description: "Restore MAG points of Magicka",
@@ -1189,20 +1377,52 @@ var PotionFactory = function() {
       dur: 0
     },
     restore_stamina: {
+      description: "Restore MAG Stamina",
+      cost: 0.6,
+      mag: 5,
+      dur: 0
     },
     slow: {
+      description: "Target moves at 50% speed for DUR seconds",
+      cost: 1,
+      mag: 50,
+      dur: 5
     },
     waterbreathing: {
+      description: "Can breathe underwater for DUR seconds",
+      cost: 30,
+      mag: 0,
+      dur: 30
     },
     weakness_to_fire: {
+      description: "Target is MAG% weaker to fire damage for DUR seconds",
+      cost: 0.6,
+      mag: 3,
+      dur: 30
     },
     weakness_to_frost: {
+      description: "Target is MAG% weaker to frost damage for DUR seconds",
+      cost: 0.5,
+      mag: 3,
+      dur: 30
     },
     weakness_to_magic: {
+      description: "Target is MAG% weaker to magic for DUR seconds",
+      cost: 1,
+      mag: 2,
+      dur: 30
     },
     weakness_to_poison: {
+      description: "Target is MAG% weaker to poison for DUR seconds",
+      cost: 1,
+      mag: 2,
+      dur: 30
     },
     weakness_to_shock: {
+      description: "Target is MAG% weaker to shock damage for DUR seconds",
+      cost: 0.7,
+      mag: 3,
+      dur: 30
     }
   };
 
@@ -1314,6 +1534,9 @@ var PotionFactory = function() {
       potion_effects = potion_effects.concat(this.potionIntersection(expanded_effects1, expanded_effects3));
       potion_effects = potion_effects.concat(this.potionIntersection(expanded_effects2, expanded_effects3));
     }
+    if ( potion_effects.length == 0 ) {
+      return;
+    }
     potion_effects = this.potionUniqEffects(potion_effects);
     potion_effects = _.sortBy(potion_effects, function(effect) {return -effect['cost']});
     total_cost = _.reduce(potion_effects, function(m, effect) { return m + effect['cost'] }, 0);
@@ -1338,16 +1561,18 @@ var PotionFactory = function() {
     var ret = {};
     ret['ingredients'] = new Array;
 
+    // need two things to mix
     if (available.length < 2 ) { return; }
 
     var i,j;
 
+    // find best two-reagent potion
     for(i=0;i<(available.length-1);i++) {
-      // FIXME: we could save some time here by only looking at j reagents that match i on an effect
       for(j=i+1;j<available.length;j++) {
-        console.log(available[i]);
-        console.log(available[j]);
         potion = this.mixPotion(available[i]['label'], available[j]['label']);
+        if ( typeof potion === 'undefined' ) {
+          continue;
+        }
         if ( potion['total_cost'] > max_cost ) {
           max_potion = potion;
           max_cost = potion['total_cost'];
@@ -1357,37 +1582,42 @@ var PotionFactory = function() {
       }
     }
 
+    // can't even mix two reagents, no point in going for three
     if (max_cost < 0) { return; }
 
-    ret['ingredients'].push(available[max_i]);
-    ret['ingredients'].push(available[max_j]);
-
+    // find best three-reagent potion
     if (available.length > 2) {
-      // FIXME: we could save some time here by only looking at k reagents that match i or j on an effect
-      for(k=0;k<available.length;k++) {
-        if (( k === max_i )||( k === max_j )) {
-          continue;
-        }
-        potion = this.mixPotion(available[max_i]['label'], available[max_j]['label'], available[k]['label']);
-        console.log(potion);
-        if ( potion['total_cost'] > max_cost ) {
-          console.log('found third ingredient');
-          max_cost = potion['total_cost'];
-          max_potion = potion;
-          max_k = k;
+      for(i=0;i<(available.length-2);i++) {
+        for(j=i+1;j<available.length-1;j++) {
+          for(k=j+1;k<available.length;k++) {
+            potion = this.mixPotion(available[i]['label'], available[j]['label'], available[k]['label']);
+            if ( typeof potion === 'undefined' ) {
+              continue;
+            }
+            if ( potion['total_cost'] > max_cost ) {
+              max_potion = potion;
+              max_cost = potion['total_cost'];
+              max_i = i;
+              max_j = j;
+              max_k = k;
+            }
+          }
         }
       }
     }
 
+    ret['ingredients'].push(available[max_i]);
+    ret['ingredients'].push(available[max_j]);
+
     if (typeof max_k !== 'undefined') {
-      console.log('max_k set');
       ret['ingredients'].push(available[max_k]);
     }
 
-    var min_num = 999999;
+    // find the minimum num of the two or three reagents to use as the num to mix
+    var min_num = 999999; // expect skyrim loops at 256 or something
     _.each(ret['ingredients'], function(ingredient) { if ( ingredient['num'] < min_num ) { min_num = ingredient['num'] } });
-
     ret['num'] = min_num;
+
     ret['potion'] = max_potion;
 
     return ret;
@@ -1413,13 +1643,13 @@ var PotionFactory = function() {
         });
       });
     }
-    return ret;
+    return _.sortBy(ret, function(result) { return -result['potion']['total_cost'] });
   }
 }
 
 var potion_factory = new PotionFactory;
 
-console.log( potion_factory.mixPotion('bear_claws', 'giants_toe', 'hanging_moss') )
-console.log( potion_factory.mixPotion('blue_butterfly_wing', 'blue_mountain_flower', 'giants_toe') )
+//console.log(potion_factory.mixPotion('hagraven_claw', 'hawk_beak'));
 
+potion_factory.validateIngredientsEffects();
 

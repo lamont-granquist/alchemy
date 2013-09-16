@@ -1,7 +1,547 @@
 
-var PotionFactory = function() {
-  this.alchemySkill = 100;
+/* monkeypatching String to implement simple hashCode to 32-bit value
 
+String.prototype.hashCode = function(){
+  var hash = 0;
+  if (this.length == 0) return hash;
+  for (var i = 0; i < this.length; i++) {
+    var ch = this.charCodeAt(i);
+    hash = ((hash<<5)-hash)+ch;
+    hash &= hash; // Convert to 32bit integer
+  }
+  return hash;
+};
+*/
+
+/*
+ * AlchemyIngredient class
+ */
+
+var AlchemyIngredient = function(label) {
+  if ( typeof AlchemyData.ingredients[label] === 'undefined' ) {
+    alert("cannot find alchemy ingredient: " + label);
+    return
+  }
+
+  var ingredient_data = AlchemyData.ingredients[label];
+
+  var name;
+  if ( typeof ingredient_data['name'] !== 'undefined' ) {
+    name = ingredient_data['name'];
+  } else {
+    name = label.replace(/_/g, " ").replace(/(?:^|\s)\S/g, function(a) { return a.toUpperCase(); });
+  }
+
+  this.label = label;
+  this.name = name;
+  this.dlc = ingredient_data['dlc'];
+  this.effects = _.map(ingredient_data['effects'], function(effect) { return new AlchemyEffect(effect); });
+};
+
+AlchemyIngredient.ingredientList = function() {
+  var ingredients = AlchemyData.ingredients;
+
+  if ( typeof perks === 'undefined' ) {
+    perks = new AlchemyPerks;
+  }
+
+  return _.map(ingredients, function(ingredient, label) { return new AlchemyIngredient(label) }, this);
+};
+
+AlchemyIngredient.prototype.mixableIntersection = function(ingredientsList) {
+  ingredient_intersection = [];
+
+  for(k=0;k<ingredientsList.length;k++) {
+    if ( this.label === ingredientsList[k].label ) {
+      continue;
+    }
+    loop1:
+    for(var i=0;i<this.effects.length;i++) {
+      for(var j=0;j<ingredientsList[k].effects.length;j++) {
+        if ( this.effects[i].label === ingredientsList[k].effects[j].label ) {
+          ingredient_intersection.push(ingredientsList[k]);
+          break loop1;
+        }
+      }
+    }
+  };
+
+  return ingredient_intersection;
+}
+
+/*
+ * AlchemyEffect class
+ */
+
+var AlchemyEffect = function(label) {
+  if ( typeof AlchemyData.effects[label] === 'undefined' ) {
+    alert("cannot find alchemy effect: " + label);
+    return
+  }
+
+  var effect_data = AlchemyData.effects[label]
+
+  this.label = label;
+  this.description = effect_data['description'];
+  this.cost = effect_data['cost'];
+  this.mag = effect_data['mag'];
+  this.dur = effect_data['dur'];
+};
+
+/* XXX: non-threadsafe globals */
+var expandEffectCachePerks = "";
+var expandEffectCache = {};
+
+AlchemyEffect.prototype.expandEffectCached = function(ingredient_label, perks) {
+  if ( expandEffectCachePerks !== perks.toString() ) {
+    expandEffectCachePerks = perks.toString();
+    expandEffectCache = {};
+  } else {
+    if ( ( typeof expandEffectCache[ingredient_label] !== 'undefined' ) &&
+        ( typeof expandEffectCache[ingredient_label][this.label] !== 'undefined' ) ) {
+      return expandEffectCache[ingredient_label][this.label];
+    }
+  }
+  if ( typeof expandEffectCache[ingredient_label] === 'undefined' ) {
+    expandEffectCache[ingredient_label] = {}
+  }
+  expandEffectCache[ingredient_label][this.label] = this.expandEffect(ingredient_label, perks);
+  return expandEffectCache[ingredient_label][this.label];
+}
+
+AlchemyEffect.prototype.expandEffect = function(ingredient_label, perks) {
+  var mag = this.mag;
+  var dur = this.dur;
+  var cost = this.cost;
+
+  var multipliers = {};
+
+  if ( typeof AlchemyData.multipliers[ingredient_label] !== 'undefined' &&
+      typeof AlchemyData.multipliers[ingredient_label][this.label] !== 'undefined' ) {
+    multipliers = AlchemyData.multipliers[ingredient_label][this.label];
+  }
+
+  if ( typeof multipliers['mag'] !== 'undefined' ) {
+    mag *= multipliers['mag'];
+  }
+
+  if ( typeof multipliers['dur'] !== 'undefined' ) {
+    dur *= multipliers['dur'];
+  }
+
+  if ( _.contains(['invisibility','paralysis','slow'], this.label) ) {
+    dur *= 4 * Math.pow(1.5, perks.skill/100.0);
+  } else {
+    mag *= 4 * Math.pow(1.5, perks.skill/100.0);
+  }
+
+  if ( dur > 0 ) {
+    if ( mag > 0 ) {
+      cost = Math.floor(cost * Math.pow(mag, 1.1) * 0.0794328 * Math.pow(dur, 1.1))
+    } else {
+      cost = Math.floor(cost * 0.0794328 * Math.pow(dur, 1.1))
+    }
+  } else {
+    cost = Math.floor(cost * Math.pow(mag, 1.1) )
+  }
+
+  if ( typeof multipliers['cost'] !== 'undefined' ) {
+    cost *= multipliers['cost'];
+  }
+
+  new_effect = new AlchemyEffect(this.label);
+
+  new_effect.mag = mag;
+  new_effect.dur = dur;
+  new_effect.cost = cost;
+  new_effect.description = this.description.replace('MAG', mag).replace('DUR', dur);
+
+  return new_effect;
+};
+
+/*
+ * AlchemyLab class
+ */
+
+var AlchemyLab = function() {
+
+  this.num_rows = 4;
+  this.perks = new AlchemyPerks();
+  this.ingredientList = new AlchemyIngredient.ingredientList(this.perks);
+  this.mixlist = new Array();
+
+  this.setIngredientCount = function(num) {
+    this.ingredientList = _.map(this.ingredientList, function(ingredient) { ingredient['num'] = num; return ingredient });
+  }
+
+  this.setIngredientCount(1);
+
+  this.setRows = function(rows) {
+    this.num_rows = rows;
+
+    this.rows = new Array();
+
+    for(i=0;i<rows;i++) {
+      this.rows[i] = new Array();
+    }
+
+    var row_length = Math.ceil(this.ingredientList.length/rows);
+
+    j = 0;
+    for(i=0;i<rows;i++) {
+      for(;(j<row_length * (i+1))&&(j<this.ingredientList.length); j++) {
+        this.rows[i].push(this.ingredientList[j]);
+      }
+    }
+  }
+};
+
+AlchemyLab.prototype.ingredientListDifference = function(list1, list2) {
+  ret = [];
+  for(i=0;i<list1.length;i++) {
+    found = false;
+    for(j=0;j<list2.length;j++) {
+      if ( list1[i].label === list2[j].label ) {
+        found = true;
+      }
+    }
+    if (!found) {
+      ret.push(list1[i]);
+    }
+  }
+  return ret;
+}
+
+AlchemyLab.prototype.ingredientListUnion = function(list1, list2) {
+  var done = {};
+  var ret = [];
+  for(i=0;i<list1.length;i++) {
+    if ( ! done[list1[i].label] ) {
+      done[list1[i].label] = true;
+      ret.push(list1[i]);
+    }
+  }
+  for(j=0;j<list2.length;j++) {
+    if ( ! done[list2[j].label] ) {
+      done[list2[j].label] = true;
+      ret.push(list2[j]);
+    }
+  }
+  return ret;
+}
+
+AlchemyLab.prototype.pickMaxValue = function(ingredientList) {
+    var ingredient_i;
+    var ingredient_j;
+    var ingredient_k;
+    var max_cost = -1;
+    var max_potion;
+
+    var ret = {};
+
+    // need two things to mix
+    if (ingredientList.length < 2 ) { return; }
+
+    var i,j;
+
+    var perks = new AlchemyPerks();
+
+    // find best two-reagent potion
+    done1 = [];
+    for(i=0;i<(ingredientList.length-1);i++) {
+      done1.push(ingredientList[i]);
+      filteredIngredientList = ingredientList[i].mixableIntersection(this.ingredientListDifference(ingredientList, done1));
+      // console.log(filteredIngredientList.length);
+      for(j=0;j<filteredIngredientList.length;j++) {
+        potion = AlchemyMixer.mixPotionCached(perks, ingredientList[i], filteredIngredientList[j]);
+        if ( typeof potion === 'undefined' ) {
+          continue;
+        }
+        if ( potion.total_cost > max_cost ) {
+          max_potion = potion;
+          max_cost = potion.total_cost;
+          ingredient_i = ingredientList[i];
+          ingredient_j = filteredIngredientList[j];
+        }
+      }
+    }
+
+    // can't even mix two reagents, no point in going for three
+    if (max_cost < 0) { return; }
+
+    // find best three-reagent potion
+    if (ingredientList.length > 2) {
+      done1 = [];
+      for(i=0;i<(ingredientList.length-2);i++) {
+        done1.push(ingredientList[i]);
+        filteredIngredientList = ingredientList[i].mixableIntersection(this.ingredientListDifference(ingredientList, done1));
+        // console.log(filteredIngredientList.length);
+        done2 = [];
+        for(j=0;j<filteredIngredientList.length;j++) {
+          done2.push(filteredIngredientList[j]);
+          not_done = this.ingredientListDifference(this.ingredientListDifference(ingredientList, done1), done2);
+          filteredIngredientList2 = this.ingredientListUnion(
+            ingredientList[i].mixableIntersection(not_done),
+            filteredIngredientList[j].mixableIntersection(not_done)
+          );
+          // console.log(filteredIngredientList.length + ' ' + filteredIngredientList2.length);
+          for(k=0;k<filteredIngredientList2.length;k++) {
+            potion = AlchemyMixer.mixPotionCached(perks, ingredientList[i], filteredIngredientList[j], filteredIngredientList2[k]);
+            if ( typeof potion === 'undefined' ) {
+              continue;
+            }
+            if ( potion.total_cost > max_cost ) {
+              max_potion = potion;
+              max_cost = potion.total_cost;
+              ingredient_i = ingredientList[i];
+              ingredient_j = filteredIngredientList[j];
+              ingredient_k = filteredIngredientList2[k];
+            }
+          }
+        }
+      }
+    }
+
+    var max_ingredients = new Array();
+
+    max_ingredients.push(ingredient_i);
+    max_ingredients.push(ingredient_j);
+
+    if (typeof ingredient_k !== 'undefined') {
+      max_ingredients.push(ingredient_k);
+    }
+
+    // find the minimum num of the two or three reagents to use as the num to mix
+    var min_num = 999999;
+    _.each(max_ingredients, function(ingredient) { if ( ingredient.num < min_num ) { min_num = ingredient.num } });
+
+    return {
+      num: min_num,
+      potion: max_potion,
+      ingredients: max_ingredients
+    };
+  };
+
+AlchemyLab.prototype.generateMixlist = function() {
+    if (window.console && window.console.profile) {
+      console.profile("alchemy profile");
+    }
+
+  this.mixlist = new Array();
+  // need a copy to mutate or we wind up updating the view
+  var ingredientList = _.map(this.ingredientList, function(ingredient) { i = new AlchemyIngredient(ingredient.label); i.num = ingredient.num; return i });
+  // strip out all the reagents with zero
+  newlist = [];
+  for(i=0;i<ingredientList.length;i++) {
+    if (ingredientList[i].num > 0) {
+      newlist.push(ingredientList[i]);
+    }
+  }
+  ingredientList = newlist;
+  while(1) {
+    console.log("round");
+    var round = this.pickMaxValue(ingredientList);
+    if (typeof round === 'undefined' ) {
+      break;
+    }
+    this.mixlist.push(round);
+
+    newlist = [];
+    for(i=0;i<ingredientList.length;i++) {
+      for(j=0;j<round.ingredients.length;j++) {
+        if ( ingredientList[i].label === round.ingredients[j].label ) {
+          ingredientList[i].num -= round.ingredients[j].num;
+        }
+      }
+      if (ingredientList[i].num > 0) {
+        newlist.push(ingredientList[i]);
+      }
+    }
+    ingredientList = newlist;
+  }
+  this.mixlist = _.sortBy(this.mixlist, function(result) { return -result.potion.total_cost });
+    if (window.console && window.console.profile) {
+      console.profileEnd();
+    }
+};
+
+/*
+ * AlchemyPerks class
+ */
+
+var AlchemyPerks = function() {
+  this.skill = 100;          /* 15-100 */
+  this.fortify_alchemy = 0;  /* 0,20,40,60,80,100 */
+  this.alchemist = 0;   /* 0,25 */
+  this.physician = 0;    /* 0,25 */
+  this.benefactor = 0;  /* 0,25 */
+  this.poisoner = 0;    /* 0,25 */
+};
+
+AlchemyPerks.prototype.toString = function() {
+  return [ this.skill, this.fortify_alchemy, this.alchemist, this.physician, this.benefactor, this.poisoner ].join('_');
+}
+
+/*
+ * AlchemyMixer class
+ */
+
+var AlchemyMixer = function() {
+};
+
+AlchemyMixer.potionIntersection = function(e1, e2) {
+  var effects = new Array();
+  for(i=0;i<e1.length;i++) {
+    for(j=0;j<e2.length;j++) {
+      if ( e1[i].label === e2[j].label ) {
+        if ( e1[i].cost > e2[j].cost ) {
+          effects.push(e1[i]);
+        } else {
+          effects.push(e2[j]);
+        }
+      }
+    }
+  }
+  return effects;
+};
+
+AlchemyMixer.potionUniqEffects = function(effects) {
+  var ret = new Array();
+  var doneburger = {};
+  for(i=0;i<effects.length;i++) {
+    var winner = true;
+    for(j=0;j<effects.length;j++) {
+      if (i === j) {
+        continue;
+      }
+      if (( effects[i].label === effects[j].label ) && ( effects[i].cost < effects[j].cost )) {
+        winner = false;
+      }
+    }
+    if (winner && !doneburger[effects[i].label] ) {
+      doneburger[effects[i].label] = true;
+      ret.push(effects[i]);
+    }
+  }
+  return ret;
+};
+
+/* XXX: non-threadsafe globals */
+var mixPotionCachePerks = "";
+var mixPotionTwoCache = {};
+var mixPotionThreeCache = {};
+
+AlchemyMixer.mixPotionCached = function(perks, ingredient1, ingredient2, ingredient3) {
+  if ( mixPotionCachePerks !== perks.toString() ) {
+    mixPotionCachePerks = perks.toString();
+    mixPotionTwoCache = {};
+    mixPotionThreeCache = {};
+  } else {
+    if ( typeof ingredient3 === 'undefined' ) {
+      if ( ( typeof mixPotionTwoCache[ingredient1.label] !== 'undefined') &&
+          ( typeof mixPotionTwoCache[ingredient1.label][ingredient2.label] !== 'undefined') ) {
+        return mixPotionTwoCache[ingredient1.label][ingredient2.label];
+      }
+    } else {
+      if ( ( typeof mixPotionThreeCache[ingredient1.label] !== 'undefined') &&
+          ( typeof mixPotionThreeCache[ingredient1.label][ingredient2.label] !== 'undefined') &&
+         ( typeof mixPotionThreeCache[ingredient1.label][ingredient2.label][ingredient3.label] !== 'undefined') ) {
+        return mixPotionThreeCache[ingredient1.label][ingredient2.label][ingredient3.label];
+      }
+    }
+  }
+  if ( typeof ingredient3 === 'undefined' ) {
+    if ( typeof mixPotionTwoCache[ingredient1.label] === 'undefined') {
+      mixPotionTwoCache[ingredient1.label] = {};
+    }
+    mixPotionTwoCache[ingredient1.label][ingredient2.label] = AlchemyMixer.mixPotion(perks, ingredient1, ingredient2);
+    return mixPotionTwoCache[ingredient1.label][ingredient2.label];
+  } else {
+    if ( typeof mixPotionThreeCache[ingredient1.label] === 'undefined') {
+      mixPotionThreeCache[ingredient1.label] = {};
+    }
+    if ( typeof mixPotionThreeCache[ingredient1.label][ingredient2.label] === 'undefined') {
+      mixPotionThreeCache[ingredient1.label][ingredient2.label] = {};
+    }
+    mixPotionThreeCache[ingredient1.label][ingredient2.label][ingredient3.label] = AlchemyMixer.mixPotion(perks, ingredient1, ingredient2, ingredient3);
+    return mixPotionThreeCache[ingredient1.label][ingredient2.label][ingredient3.label];
+  }
+}
+
+AlchemyMixer.mixPotion = function(perks, ingredient1, ingredient2, ingredient3) {
+  var effects1 = [];
+  for(var i=0;i<ingredient1.effects.length;i++) {
+    effects1.push(ingredient1.effects[i].expandEffectCached(ingredient1.label, perks));
+  }
+  var effects2 = [];
+  for(var i=0;i<ingredient2.effects.length;i++) {
+    effects2.push(ingredient2.effects[i].expandEffectCached(ingredient2.label, perks));
+  }
+  var effects3 = [];
+  if ( typeof ingredient3 !== 'undefined' ) {
+    for(var i=0;i<ingredient3.effects.length;i++) {
+      effects3.push(ingredient3.effects[i].expandEffectCached(ingredient3.label, perks));
+    }
+  }
+  var potion_effects = [];
+  if ( effects3.length > 0 ) {
+    potion_effects1 = this.potionIntersection(effects1, effects2);
+    potion_effects2 = this.potionIntersection(effects2, effects3);
+    potion_effects3 = this.potionIntersection(effects3, effects1);
+    for(i=0;i<potion_effects1.length;i++) {
+      potion_effects.push(potion_effects1[i]);
+    }
+    for(i=0;i<potion_effects2.length;i++) {
+      potion_effects.push(potion_effects2[i]);
+    }
+    for(i=0;i<potion_effects2.length;i++) {
+      potion_effects.push(potion_effects2[i]);
+    }
+    potion_effects = this.potionUniqEffects(potion_effects);
+  } else {
+    potion_effects = this.potionIntersection(effects1, effects2);
+  }
+  if ( potion_effects.length == 0 ) {
+    return;
+  }
+  /* _.sortBy() was very slow, potion_effects is only 1-5 in length, so bubble sort shaves off almost 4 seconds (30% of time) */
+  for(var i=0;i<potion_effects.length-1;i++) {
+    for(var j=i+1;j<potion_effects.length;j++) {
+      if (potion_effects[i].cost < potion_effects[j].cost) {
+        var temp = potion_effects[i];
+        potion_effects[i] = potion_effects[j];
+        potion_effects[j] = temp;
+      }
+    }
+  }
+  total_cost = 0;
+  for(var i=0;i<potion_effects.length;i++) {
+    total_cost += potion_effects[i].cost;
+  }
+  var ingredients = [ ingredient1, ingredient2 ];
+  if ( typeof ingredient3 !== 'undefined' ) {
+    ingredients.push(ingredient3);
+  }
+  return new AlchemyPotion(ingredients, potion_effects, total_cost);
+};
+
+/*
+ * AlchemyPotion
+ */
+
+var AlchemyPotion = function(ingredients, effects, total_cost) {
+  this.ingredients = ingredients;
+  this.effects = effects;
+  this.total_cost = total_cost;
+};
+
+/*
+ * AlchemyData
+ */
+
+var AlchemyData = function() {
+
+  /*
   // sanity check to check the data looks valid
   this.validateIngredientsEffects = function() {
     var badness = false;
@@ -28,9 +568,11 @@ var PotionFactory = function() {
     if (badness) {
       alert("alchemy data failed internal consistency check!\ne-mail lamont@scriptkiddie.org and let him know");
     }
-  }
+  };
+  */
+};
 
-  this.ingredients = {
+AlchemyData.ingredients = {
     abecan_longfin: {
       effects: [
         'weakness_to_frost',
@@ -961,7 +1503,7 @@ var PotionFactory = function() {
     }
   };
 
-  this.multipliers = {
+AlchemyData.multipliers = {
     bear_claws: {
       restore_stamina: {
         mag: 0.8
@@ -1093,7 +1635,7 @@ var PotionFactory = function() {
     }
   };
 
-  this.effects = {
+AlchemyData.effects = {
     cure_disease: {
       description: "Cures all diseases",
       cost: 0.5,
@@ -1425,231 +1967,4 @@ var PotionFactory = function() {
       dur: 30
     }
   };
-
-  this.ingredientDisplayName = function(ingredient) {
-    if ( this.ingredients[ingredient].name ) {
-      return this.ingredients[ingredient].name
-    }
-    return ingredient.replace(/_/g, " ").replace(/(?:^|\s)\S/g, function(a) { return a.toUpperCase(); });
-  };
-
-  this.potionIntersection = function(e1, e2) {
-    var effects = new Array();
-    _.each(e1, function(effect1) {
-      _.each(e2, function(effect2) {
-        if ( effect1.effect === effect2.effect ) {
-          if ( effect1.cost > effect2.cost ) {
-            effects.push(effect1);
-          } else {
-            effects.push(effect2);
-          }
-        }
-      });
-    });
-    return effects;
-  };
-
-  this.expandEffect = function(effect, ingredient) {
-    var cost = this.effects[effect]['cost'];
-    var mag = this.effects[effect]['mag'];
-    var dur = this.effects[effect]['dur'];
-
-    if ( this.multipliers[ingredient] && this.multipliers[ingredient][effect] ) {
-
-      var multipliers = this.multipliers[ingredient][effect];
-
-      if ( multipliers['mag'] ) {
-        mag *= multipliers['mag'];
-      }
-
-      if ( multipliers['dur'] ) {
-        dur *= multipliers['dur'];
-      }
-    }
-
-    if ( _.contains(['invisibility','paralysis','slow'], effect) ) {
-      dur *= 4 * Math.pow(1.5, this.alchemySkill/100.0);  // alchemy skill == 100
-    } else {
-      mag *= 4 * Math.pow(1.5, this.alchemySkill/100.0);  // alchemy skill == 100
-    }
-    var gold;
-    if ( dur > 0 ) {
-      if ( mag > 0 ) {
-        gold = Math.floor(cost * Math.pow(mag, 1.1) * 0.0794328 * Math.pow(dur, 1.1))
-      } else {
-        gold = Math.floor(cost * 0.0794328 * Math.pow(dur, 1.1))
-      }
-    } else {
-      gold = Math.floor(cost * Math.pow(mag, 1.1) )
-    }
-    return {
-      effect: effect,
-      dur: dur,
-      mag: mag,
-      cost: gold
-    }
-  };
-
-  this.setAlchemySkill = function(alchemySkill) {
-    this.alchemySkill = alchemySkill;
-  };
-
-  this.potionUniqEffects = function(effects) {
-    var ret = new Array();
-    var doneburger = {};
-    for(i=0;i<effects.length;i++) {
-      var winner = true
-        for(j=0;j<effects.length;j++) {
-      if (i === j) {
-        continue;
-      }
-      if (( effects[i].effect === effects[j].effect ) && ( effects[i].cost < effects[j].cost )) {
-        winner = false
-      }
-        }
-        if (winner && !doneburger[effects[i].effect] ) {
-          doneburger[effects[i].effect] = true;
-          ret.push(effects[i]);
-        }
-    }
-    return ret;
-  }
-
-  this.mixPotion = function() {
-    var ingredient1 = arguments[0];
-    var ingredient2 = arguments[1];
-    var ingredient3 = arguments[2];
-    var effects1 = this.ingredients[ingredient1]['effects'];
-    var expanded_effects1 = _.map(effects1, function(effect) { return this.expandEffect(effect, ingredient1) }, this);
-    var effects2 = this.ingredients[ingredient2]['effects'];
-    var expanded_effects2 = _.map(effects2, function(effect) { return this.expandEffect(effect, ingredient2) }, this);
-    var effects3;
-    var expanded_effects2;
-    if ( ingredient3 ) {
-      effects3 = this.ingredients[ingredient3]['effects'];
-      expanded_effects3 = _.map(effects3, function(effect) { return this.expandEffect(effect, ingredient3) }, this);
-    }
-    var potion_effects = this.potionIntersection(expanded_effects1, expanded_effects2);
-    if ( effects3 ) {
-      potion_effects = potion_effects.concat(this.potionIntersection(expanded_effects1, expanded_effects3));
-      potion_effects = potion_effects.concat(this.potionIntersection(expanded_effects2, expanded_effects3));
-    }
-    if ( potion_effects.length == 0 ) {
-      return;
-    }
-    potion_effects = this.potionUniqEffects(potion_effects);
-    potion_effects = _.sortBy(potion_effects, function(effect) {return -effect['cost']});
-    total_cost = _.reduce(potion_effects, function(m, effect) { return m + effect['cost'] }, 0);
-    return {
-      effects: potion_effects,
-      total_cost: total_cost
-    }
-  };
-
-  // array representation that is more useful for the angular data model
-  this.ingredientsList = function() {
-    return _.map(this.ingredients, function(ingredient, label) { return { name: this.ingredientDisplayName(label), label: label, effects: ingredient['effects'], dlc: ingredient['dlc'] }}, this);
-  };
-
-  this.pickMaxValue = function(available) {
-    var max_i;
-    var max_j;
-    var max_k;
-    var max_cost = -1;
-    var max_potion;
-
-    var ret = {};
-    ret['ingredients'] = new Array;
-
-    // need two things to mix
-    if (available.length < 2 ) { return; }
-
-    var i,j;
-
-    // find best two-reagent potion
-    for(i=0;i<(available.length-1);i++) {
-      for(j=i+1;j<available.length;j++) {
-        potion = this.mixPotion(available[i]['label'], available[j]['label']);
-        if ( typeof potion === 'undefined' ) {
-          continue;
-        }
-        if ( potion['total_cost'] > max_cost ) {
-          max_potion = potion;
-          max_cost = potion['total_cost'];
-          max_i = i;
-          max_j = j;
-        }
-      }
-    }
-
-    // can't even mix two reagents, no point in going for three
-    if (max_cost < 0) { return; }
-
-    // find best three-reagent potion
-    if (available.length > 2) {
-      for(i=0;i<(available.length-2);i++) {
-        for(j=i+1;j<available.length-1;j++) {
-          for(k=j+1;k<available.length;k++) {
-            potion = this.mixPotion(available[i]['label'], available[j]['label'], available[k]['label']);
-            if ( typeof potion === 'undefined' ) {
-              continue;
-            }
-            if ( potion['total_cost'] > max_cost ) {
-              max_potion = potion;
-              max_cost = potion['total_cost'];
-              max_i = i;
-              max_j = j;
-              max_k = k;
-            }
-          }
-        }
-      }
-    }
-
-    ret['ingredients'].push(available[max_i]);
-    ret['ingredients'].push(available[max_j]);
-
-    if (typeof max_k !== 'undefined') {
-      ret['ingredients'].push(available[max_k]);
-    }
-
-    // find the minimum num of the two or three reagents to use as the num to mix
-    var min_num = 999999; // expect skyrim loops at 256 or something
-    _.each(ret['ingredients'], function(ingredient) { if ( ingredient['num'] < min_num ) { min_num = ingredient['num'] } });
-    ret['num'] = min_num;
-
-    ret['potion'] = max_potion;
-
-    return ret;
-  }
-
-  this.solveIngredients = function(reagents) {
-    // need a copy to mutate or we wind up updating the view
-    reagents = _.map(reagents, function(reagent) { return { label: reagent['label'], num: reagent['num'] } });
-    var ret = new Array();
-    while(1) {
-      // strip out all the reagents with zero
-      reagents = _.select(reagents, function(reagent) { return reagent['num'] > 0 });
-      var round = this.pickMaxValue(reagents);
-      if (typeof round === 'undefined' ) {
-        break;
-      }
-      ret.push(round);
-      _.each(reagents, function(reagent) {
-        _.each(round['ingredients'], function(ingredient) {
-          if ( reagent['label'] === ingredient['label'] ) {
-            reagent['num'] -= round['num'];
-          }
-        });
-      });
-    }
-    return _.sortBy(ret, function(result) { return -result['potion']['total_cost'] });
-  }
-}
-
-var potion_factory = new PotionFactory;
-
-//console.log(potion_factory.mixPotion('hagraven_claw', 'hawk_beak'));
-
-potion_factory.validateIngredientsEffects();
 

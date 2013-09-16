@@ -56,7 +56,7 @@
       </div>
       <div class="container">
         <table class="table table-striped table-hover table-condensed table-responsive">
-          <tr ng-repeat="mix in alchemyLab.mixlist">
+          <tr ng-repeat="mix in mixlist">
             <td>{{ mix.num }}</td>
             <td>{{ mix.potion.total_cost }}</td>
             <td ng-repeat="ingredient in mix.ingredients">{{ ingredient.label }}</td>

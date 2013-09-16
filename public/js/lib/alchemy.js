@@ -174,7 +174,7 @@ var AlchemyLab = function() {
     this.ingredientList = _.map(this.ingredientList, function(ingredient) { ingredient['num'] = num; return ingredient });
   }
 
-  this.setIngredientCount(1);
+  this.setIngredientCount(undefined);
 
   this.setRows = function(rows) {
     this.num_rows = rows;
@@ -322,12 +322,12 @@ AlchemyLab.prototype.pickMaxValue = function(ingredientList) {
     };
   };
 
-AlchemyLab.prototype.generateMixlist = function() {
-    if (window.console && window.console.profile) {
+AlchemyLab.prototype.generateMixlist = function(callback) {
+ /*   if (window.console && window.console.profile) {
       console.profile("alchemy profile");
-    }
+    } */
 
-  this.mixlist = new Array();
+  var mixlist = new Array();
   // need a copy to mutate or we wind up updating the view
   var ingredientList = _.map(this.ingredientList, function(ingredient) { i = new AlchemyIngredient(ingredient.label); i.num = ingredient.num; return i });
   // strip out all the reagents with zero
@@ -338,14 +338,20 @@ AlchemyLab.prototype.generateMixlist = function() {
     }
   }
   ingredientList = newlist;
-  while(1) {
-    console.log("round");
-    var round = this.pickMaxValue(ingredientList);
-    if (typeof round === 'undefined' ) {
-      break;
-    }
-    this.mixlist.push(round);
 
+  var that = this;
+  var pickNext = function(ingredientList) {
+    var round = that.pickMaxValue(ingredientList);
+    if (typeof round === 'undefined' ) {
+      callback(mixlist);
+      /*
+      if (window.console && window.console.profile) {
+        console.profileEnd();
+      }
+      */
+      return;
+    }
+    mixlist.push(round);
     newlist = [];
     for(i=0;i<ingredientList.length;i++) {
       for(j=0;j<round.ingredients.length;j++) {
@@ -357,12 +363,10 @@ AlchemyLab.prototype.generateMixlist = function() {
         newlist.push(ingredientList[i]);
       }
     }
-    ingredientList = newlist;
+    setTimeout(pickNext, 20, newlist);  // fails on IE9
   }
-  this.mixlist = _.sortBy(this.mixlist, function(result) { return -result.potion.total_cost });
-    if (window.console && window.console.profile) {
-      console.profileEnd();
-    }
+
+  setTimeout(pickNext, 20, ingredientList);  // fails on IE9
 };
 
 /*
